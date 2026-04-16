@@ -5,19 +5,77 @@
 set -e # Exit immediately if a command fails
 
 echo "🛠️  Initializing Mesh Node..."
+sudo apt update
 
-# 1. INSTALL THE ENGINE
-echo "📦 Installing Python, Ansible, and Git..."
-sudo apt update && sudo apt install -y python3-apt ansible git-core
+# ==== INSTALL PREREQUISITES ====
 
-# 2. CAPTURE IDENTITY
-# This must match a host entry in your inventory/hosts.yml
+# Ansible
+if ! command -v ansible-playbook &> /dev/null; then
+    echo "Ansible not found. Installing now..."
+    sudo apt install -y ansible
+else
+    echo "Ansible is already installed ($(ansible-playbook --version | head -n 1))"
+fi
+
+# Ansible-lint
+if ! command -v ansible-lint >/dev/null 2>&1; then
+    echo "ansible-lint not found. Installing via apt..."
+    sudo apt install -y ansible-lint
+else
+    echo "ansible-lint is already installed: $(ansible-lint --version)"
+fi
+
+# Just
+if ! command -v just >/dev/null 2>&1; then
+    echo "just not found. Installing via apt..."
+    sudo apt install -y just
+else
+    echo "just is already installed: $(just --version)"
+fi
+
+# Git
+if ! command -v git &> /dev/null; then
+    echo "git not found. Installing now..."
+    sudo apt install -y git-core
+fi
+
+
+# === CLONE REPO ===
+
+REPO_DIR="$HOME/code/emildimitrov/workstations"
+
+if [ ! -d "$REPO_DIR" ]; then
+    read -p "🔑 Paste GitHub Personal Access Token: " GIT_TOKEN
+    echo
+    mkdir -p "$(dirname "$REPO_DIR")"
+        REPO_URL="https://emildimitrov:${GIT_TOKEN}@github.com/emildimitrov/workstations.git"
+        echo "repo is $REPO_URL"
+    git clone "$REPO_URL" "$REPO_DIR"
+
+else
+    echo "⏩ Repo already cloned, pulling latest..."
+    git -C "$REPO_DIR" pull
+fi
+
+# === IDENTITY ===
+
 read -p "❓ Enter Inventory Name (e.g., emil-laptop.local): " INV_NAME
 
-# 3. SEED THE VAULT KEY
-# Without this, Ansible cannot decrypt group_vars or private keys
+# Validate that the name exists in the inventory as a host or group
+echo "🔍 Validating '$INV_NAME' against inventory..."
+if ! ansible all -i inventory/hosts.yml --limit "$INV_NAME" --list-hosts &>/dev/null; then
+    echo "❌ ERROR: '$INV_NAME' does not match any host or group in inventory/hosts.yml"
+    echo "Possible hosts: $(ansible all -i inventory/hosts.yml --list-hosts | tail -n +2 | xargs)"
+    exit 1
+else
+    echo "✅ Identity confirmed."
+fi
+
+
+# === VAULT ===
+
 if [ ! -f /etc/ansible/.vault_pass ]; then
-    read -sp "🔐 Paste Ansible Vault Password: " VAULT_PASS
+    read -p "🔐 Paste Ansible Vault Password: " VAULT_PASS
     echo
     sudo mkdir -p /etc/ansible
     echo "$VAULT_PASS" | sudo tee /etc/ansible/.vault_pass > /dev/null
@@ -27,33 +85,10 @@ else
     echo "⏩ Vault key already exists, skipping..."
 fi
 
-# 4. CLONE THE REPO
-mkdir -p ~/code
-mkdir -p ~/code/emildimitrov
-if [ ! -d ~/code/emildimitrov/workstations ]; then
-    read -sp "🔑 Paste GitHub Personal Access Token: " GIT_TOKEN
-    echo
-    # Using the token for a one-time authenticated clone
-    REPO_URL="https://emildimitrov:${GIT_TOKEN}@github.com/emildimitrov/workstations.git"
-    git clone "$REPO_URL" ~/code/emildimitrov/workstations
-else
-    echo "⏩ Repo already cloned, pulling latest..."
-    cd ~/code/emildimitrov/workstations && git pull
-fi
+# === EXECUTION ===
 
-# 5. HAND OFF TO ANSIBLE (The "Local Push")
-cd ~/code/workstations
-echo "🚀 Running initial configuration for $INV_NAME..."
+cd "$REPO_DIR"
 
-# We use --connection=local because we are running ON the machine we are configuring.
-# We use --limit so Ansible applies the specific variables for this host from hosts.yml.
-ansible-playbook main.yml \
-  --connection=local \
-  --inventory inventory/hosts.yml \
-  --limit "$INV_NAME" \
-  --become-method=sudo
+echo "🚀 Launching configuration for: $INV_NAME"
 
-echo "=============================================================================="
-echo "✅ BOOTSTRAP COMPLETE!"
-echo "💻 $INV_NAME is now a trusted node in the P2P Mesh."
-echo "=============================================================================="
+just run-local "$INV_NAME"
