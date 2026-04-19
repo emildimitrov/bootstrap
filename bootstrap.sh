@@ -57,6 +57,22 @@ else
     git -C "$REPO_DIR" pull
 fi
 
+
+# === VAULT ===
+
+if [ ! -f /etc/ansible/.vault_pass ]; then
+    read -p "🔐 Paste Ansible Vault Password: " VAULT_PASS
+    echo
+    sudo mkdir -p /etc/ansible
+    echo "$VAULT_PASS" | sudo tee /etc/ansible/.vault_pass > /dev/null
+    sudo chmod 600 /etc/ansible/.vault_pass
+    echo "✅ Vault key seeded to /etc/ansible/.vault_pass"
+else
+    echo "⏩ Vault key already exists, skipping..."
+fi
+
+cd $REPO_DIR
+
 # === IDENTITY ===
 
 read -p "❓ Enter Inventory Name (e.g., emil-laptop.local): " INV_NAME
@@ -71,19 +87,6 @@ else
     echo "✅ Identity confirmed."
 fi
 
-
-# === VAULT ===
-
-if [ ! -f /etc/ansible/.vault_pass ]; then
-    read -p "🔐 Paste Ansible Vault Password: " VAULT_PASS
-    echo
-    sudo mkdir -p /etc/ansible
-    echo "$VAULT_PASS" | sudo tee /etc/ansible/.vault_pass > /dev/null
-    sudo chmod 600 /etc/ansible/.vault_pass
-    echo "✅ Vault key seeded to /etc/ansible/.vault_pass"
-else
-    echo "⏩ Vault key already exists, skipping..."
-fi
 
 # === EXECUTION ===
 
