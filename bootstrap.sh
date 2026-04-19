@@ -65,6 +65,7 @@ if [ ! -f /etc/ansible/.vault_pass ]; then
     echo
     sudo mkdir -p /etc/ansible
     echo "$VAULT_PASS" | sudo tee /etc/ansible/.vault_pass > /dev/null
+    sudo chown $USER:$USER /etc/ansible/.vault_pass
     sudo chmod 600 /etc/ansible/.vault_pass
     echo "✅ Vault key seeded to /etc/ansible/.vault_pass"
 else
@@ -79,7 +80,7 @@ read -p "❓ Enter Inventory Name (e.g., emil-laptop.local): " INV_NAME
 
 # Validate that the name exists in the inventory as a host or group
 echo "🔍 Validating '$INV_NAME' against inventory..."
-if ! ansible all -i inventory/hosts.yml --limit "$INV_NAME" --list-hosts &>/dev/null; then
+if ! sudo ansible all -i inventory/hosts.yml --limit "$INV_NAME" --list-hosts &>/dev/null; then
     echo "❌ ERROR: '$INV_NAME' does not match any host or group in inventory/hosts.yml"
     echo "Possible hosts: $(ansible all -i inventory/hosts.yml --list-hosts | tail -n +2 | xargs)"
     exit 1
